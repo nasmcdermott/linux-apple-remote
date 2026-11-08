@@ -135,6 +135,7 @@ def config_text(
     *,
     name: str | None = None,
     port: int = 47832,
+    address: str | None = None,
     backend: str = "uinput",
     pairing_window: int = 600,
     keymap: dict[str, str] | None = None,
@@ -156,7 +157,11 @@ def config_text(
         'device_name = "Apple TV Remote Bridge"',
         f"pairing_window = {int(pairing_window)}",
         f'pin_display = {json.dumps(pin_display)}   # auto | qt | none',
-        "# address = \"192.168.1.50\"   # uncomment if auto-detection picks the wrong interface",
+        (
+            f"address = {json.dumps(address)}"
+            if address
+            else '# address = "192.168.1.50"   # uncomment if auto-detection picks the wrong interface'
+        ),
         "",
         "[keys]",
         "# Action -> Linux input key name, or a special action.",
@@ -171,7 +176,10 @@ def config_text(
         [
             "",
             "[cec]",
-            "# Route volume/mute to the same cec-policy script as the Fire remote.",
+            "# CEC is opt-in: it needs cec-policy plus a writable /dev/cec*.",
+            "# Enable with './install.sh --cec' or set enabled = true.",
+            "# When enabled, volume/mute go to the same cec-policy script as the",
+            "# Fire remote; when disabled, the ordinary media keys are used.",
             f"enabled = {'true' if cec_cfg.enabled else 'false'}",
             f"policy = {json.dumps(cec_cfg.policy)}",
             f"volume = {'true' if cec_cfg.volume else 'false'}",
@@ -191,9 +199,11 @@ def write_default_config(
     *,
     name: str | None = None,
     port: int = 47832,
+    address: str | None = None,
     backend: str = "uinput",
     pairing_window: int = 600,
     pin_display: str = "auto",
+    cec: CecConfig | None = None,
     force: bool = False,
 ) -> Path:
     """Create the config file.  Returns the path.  Does not overwrite unless ``force``."""
@@ -205,9 +215,11 @@ def write_default_config(
         config_text(
             name=name,
             port=port,
+            address=address,
             backend=backend,
             pairing_window=pairing_window,
             pin_display=pin_display,
+            cec=cec,
         ),
         encoding="utf-8",
     )

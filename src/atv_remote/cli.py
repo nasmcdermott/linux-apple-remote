@@ -18,7 +18,7 @@ from zeroconf import ServiceInfo
 from zeroconf.asyncio import AsyncZeroconf
 
 from . import __version__
-from .cec import cec_adapters, find_policy
+from .cec import CecConfig, cec_adapters, find_policy
 from .config import (
     Config,
     config_text,
@@ -476,6 +476,11 @@ def cmd_doctor(args, cfg: Config) -> int:
         f"cec:     enabled={str(cfg.cec.enabled).lower()} policy={policy or 'not found'} "
         f"adapter={adapter} writable={writable}"
     )
+    if not cfg.cec.enabled and policy and adapters and writable == "yes":
+        print(
+            "         CEC is available but disabled; enable with --cec or "
+            "[cec].enabled = true."
+        )
 
     gui = PinDisplay(enabled=cfg.pin_display != "none")
     print(
@@ -512,14 +517,25 @@ def cmd_doctor(args, cfg: Config) -> int:
 
 
 def cmd_config_init(args, cfg: Config) -> int:
+    cec = CecConfig(
+        enabled=args.cec,
+        policy=cfg.cec.policy,
+        volume=cfg.cec.volume,
+        mute=cfg.cec.mute,
+        power_on=cfg.cec.power_on,
+        timeout=cfg.cec.timeout,
+    )
     target = write_default_config(
         cfg.config_path,
         name=args.name or cfg.name,
         port=args.port if args.port is not None else cfg.port,
+        address=args.address,
         backend=args.backend or cfg.backend,
         pairing_window=(
             args.pairing_window if args.pairing_window is not None else cfg.pairing_window
         ),
+        pin_display="none" if args.no_pin_gui else "auto",
+        cec=cec,
         force=args.force,
     )
     print(target)
@@ -536,9 +552,12 @@ def cmd_config_show(args, cfg: Config) -> int:
             config_text(
                 name=cfg.name,
                 port=cfg.port,
+                address=cfg.address,
                 backend=cfg.backend,
                 pairing_window=cfg.pairing_window,
                 keymap=cfg.keymap,
+                cec=cfg.cec,
+                pin_display=cfg.pin_display,
             )
         )
     return 0
@@ -603,9 +622,17 @@ def build_parser() -> argparse.ArgumentParser:
     init = config_sub.add_parser("init", help="write a commented default config")
     init.add_argument("--name")
     init.add_argument("--port", type=int)
+    init.add_argument("--address", help="IPv4 address to advertise")
     init.add_argument("--backend", choices=("uinput", "mpris", "log"))
     init.add_argument("--pairing-window", type=int)
+    init.add_argument("--cec", dest="cec", action="store_true",
+                      help="enable HDMI-CEC volume/mute/TV-on (opt-in)")
+    init.add_argument("--no-cec", dest="cec", action="store_false",
+                      help="disable HDMI-CEC (default)")
+    init.add_argument("--no-pin-gui", action="store_true",
+                      help="disable the on-screen pairing PIN card")
     init.add_argument("--force", action="store_true", help="overwrite an existing config")
+    init.set_defaults(cec=False)
     config_sub.add_parser("show", help="print the config file or defaults")
 
     return parser

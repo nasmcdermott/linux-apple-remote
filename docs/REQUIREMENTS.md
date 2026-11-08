@@ -118,7 +118,12 @@ On a regular KDE/GNOME desktop, `home = "auto"` emits a Meta tap. On GNOME the
 Guide button falls back to `KEY_MENU` because `activateLauncherMenu` is
 Plasma-specific.
 
-## HDMI-CEC (optional)
+## HDMI-CEC (optional, off by default)
+
+CEC is opt-in: `[cec].enabled = false` is the default. Enable it with
+`./install.sh --cec` on a new install, or set `enabled = true` in an existing
+config and restart the service. Without it, volume/mute use ordinary media
+keys and Power still opens the desktop menu.
 
 The bridge does not link `libcec` and does not touch PipeWire volume. It calls an
 existing policy script:

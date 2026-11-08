@@ -102,6 +102,18 @@ def test_config_text_includes_cec_and_new_keys():
     assert 'pin_display = "auto"' in text
 
 
+def test_cec_is_opt_in_by_default():
+    assert CecConfig().enabled is False
+    text = config_text()
+    assert "enabled = false" in text
+    assert "--cec" in text
+
+
+def test_cec_can_be_enabled_in_generated_config():
+    text = config_text(cec=CecConfig(enabled=True))
+    assert "enabled = true" in text
+
+
 def test_pin_display_roundtrip(tmp_path):
     path = tmp_path / "config.toml"
     path.write_text(config_text(pin_display="none"))

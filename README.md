@@ -54,11 +54,19 @@ Useful options:
 
 ```sh
 ./install.sh --name "Living Room"     # name shown on the phone
+./install.sh --cec                    # opt in to HDMI-CEC volume/mute/TV-on
+./install.sh --no-pin-gui             # no Qt card; PIN via log/atv-remote pin
+./install.sh --address 192.168.1.50   # pin the advertised interface
 ./install.sh --backend mpris          # media-only, no /dev/uinput access
 ./install.sh --no-service             # foreground only
 ./install.sh --force-config           # rewrite config.toml
 ./install.sh --with-tests             # install pytest too
 ```
+
+Hardware-specific extras stay off by default. CEC needs `cec-policy` and a
+writable `/dev/cec*`; without it, volume/mute use ordinary media keys and Power
+still opens the desktop menu. `--cec` only affects a newly written config —
+edit an existing `config.toml` or rerun with `--force-config`.
 
 ## Default key map
 
@@ -124,10 +132,13 @@ sleep / power off / restart / log out / cancel menu. With `[cec].power_on =
 true`, the bridge also launches `cec-policy wake --reason powerkey` to turn the
 TV on and select the PC input.
 
-When `[cec].enabled = true`, volume and mute go to the same `cec-policy`
-controller as the Fire TV remote. The bridge never touches PipeWire/Plasma
-software volume. If CEC is unavailable, volume/mute fall back to ordinary media
-keys.
+CEC is **opt-in** (`[cec].enabled = false` by default). When enabled, volume
+and mute go to the same `cec-policy` controller as the Fire TV remote. The
+bridge never touches PipeWire/Plasma software volume. If CEC is unavailable,
+volume/mute fall back to ordinary media keys.
+
+Enable it with `./install.sh --cec` (new config) or by setting
+`[cec].enabled = true` in an existing config and restarting the service.
 
 ### Pairing PIN card
 
@@ -176,11 +187,11 @@ channel_down = "KEY_CHANNELDOWN"
 guide = "bigscreen_overlay"   # or any KEY_* name
 
 [cec]
-enabled = true
+enabled = false        # opt in with --cec or set true
 policy = "auto"
-volume = true
+volume = true          # applies only when enabled
 mute = true
-power_on = true
+power_on = true        # cec-policy wake --reason powerkey on Power
 timeout = 15
 ```
 

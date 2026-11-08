@@ -20,8 +20,11 @@ UNIT_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
 UNIT="$UNIT_DIR/apple-tv-remote.service"
 NAME="${NAME:-$(uname -n)}"
 PORT="${PORT:-47832}"
+ADDRESS="${ADDRESS:-}"
 BACKEND="${BACKEND:-uinput}"
 PAIRING_WINDOW="${PAIRING_WINDOW:-600}"
+WITH_CEC="${WITH_CEC:-0}"
+PIN_DISPLAY="${PIN_DISPLAY:-auto}"
 INSTALL_SERVICE=1
 FORCE_CONFIG=0
 WITH_TESTS=0
@@ -33,15 +36,20 @@ Usage: ./install.sh [options]
 Options:
   --name NAME             name shown on the iPhone (default: hostname)
   --port PORT             TCP control port (default: 47832; 0 = random)
+  --address ADDR          IPv4 address to advertise (default: auto-detect)
   --backend NAME          uinput (default), mpris, or log
   --pairing-window SEC    seconds a new pairing is accepted (default: 600)
+  --cec                   opt in to HDMI-CEC volume/mute/TV-on
+  --no-cec                keep CEC off (default)
+  --no-pin-gui            disable the on-screen pairing PIN card
   --venv PATH             Python environment location (default: ./.venv)
   --no-service            install files but do not create/enable a systemd user unit
   --force-config          overwrite an existing config.toml
   --with-tests            also install pytest/pytest-asyncio
   -h, --help              show this help
 
-Environment: NAME, PORT, BACKEND, PAIRING_WINDOW, VENV, BIN_DIR
+Environment: NAME, PORT, ADDRESS, BACKEND, PAIRING_WINDOW, WITH_CEC,
+             PIN_DISPLAY, VENV, BIN_DIR
 EOF
 }
 
@@ -49,8 +57,12 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --name) NAME="${2:?missing value}"; shift 2 ;;
     --port) PORT="${2:?missing value}"; shift 2 ;;
+    --address) ADDRESS="${2:?missing value}"; shift 2 ;;
     --backend) BACKEND="${2:?missing value}"; shift 2 ;;
     --pairing-window) PAIRING_WINDOW="${2:?missing value}"; shift 2 ;;
+    --cec) WITH_CEC=1; shift ;;
+    --no-cec) WITH_CEC=0; shift ;;
+    --no-pin-gui) PIN_DISPLAY="none"; shift ;;
     --venv) VENV="${2:?missing value}"; shift 2 ;;
     --no-service) INSTALL_SERVICE=0; shift ;;
     --force-config) FORCE_CONFIG=1; shift ;;
@@ -78,6 +90,7 @@ fi
 # The PIN card runs in the *system* Python (not the project venv), because
 # distros ship PySide6 as a system package.  Accept any python3 that can
 # import it, including an explicit ATV_PIN_GUI_PYTHON override.
+if [[ "$PIN_DISPLAY" != "none" ]]; then
 GUI_PYTHON=""
 for candidate in "${ATV_PIN_GUI_PYTHON:-}" python3 /usr/bin/python3; do
   [[ -n "$candidate" ]] || continue
@@ -121,6 +134,34 @@ note: the layer-shell-qt QML plugin was not found; the PIN card will use a
       Plasma), e.g. sudo dnf install layer-shell-qt.
 EOF
 fi
+fi  # PIN_DISPLAY != none
+
+# CEC is opt-in.  Only print hints; the install itself never depends on it.
+CEC_POLICY=""
+for candidate in \
+  "$(command -v cec-policy 2>/dev/null || true)" \
+  /usr/local/bin/cec-policy \
+  /usr/bin/cec-policy \
+  "$HOME/.local/bin/cec-policy"; do
+  if [[ -n "$candidate" && -x "$candidate" ]]; then
+    CEC_POLICY="$candidate"
+    break
+  fi
+done
+if [[ "$WITH_CEC" -eq 1 && -z "$CEC_POLICY" ]]; then
+  cat >&2 <<'EOF'
+warning: --cec was requested, but cec-policy was not found. CEC volume/mute
+         will fall back to ordinary media keys and Power still opens the
+         desktop menu. Install cec-policy (fedora-cec-toolkit) or set
+         [cec].policy to your own script, then restart the service.
+EOF
+elif [[ "$WITH_CEC" -eq 0 && -n "$CEC_POLICY" ]]; then
+  cat >&2 <<EOF
+note: cec-policy was found at $CEC_POLICY, but CEC is opt-in and stays off.
+      Enable it with:  ./install.sh --cec --force-config
+      or set '[cec] enabled = true' in $CONFIG and restart the service.
+EOF
+fi
 
 echo "==> Installing into $ROOT"
 install_args=(-e "$ROOT")
@@ -147,11 +188,20 @@ fi
 mkdir -p "$BIN_DIR" "$CONFIG_DIR"
 if [[ ! -f "$CONFIG" || "$FORCE_CONFIG" -eq 1 ]]; then
   init_args=(--name "$NAME" --port "$PORT" --backend "$BACKEND" --pairing-window "$PAIRING_WINDOW")
+  if [[ -n "$ADDRESS" ]]; then init_args+=(--address "$ADDRESS"); fi
+  if [[ "$WITH_CEC" -eq 1 ]]; then init_args+=(--cec); fi
+  if [[ "$PIN_DISPLAY" == "none" ]]; then init_args+=(--no-pin-gui); fi
   if [[ "$FORCE_CONFIG" -eq 1 ]]; then init_args+=(--force); fi
   "$VENV/bin/atv-remote" --config "$CONFIG" config init "${init_args[@]}" >/dev/null
   echo "==> Wrote config: $CONFIG"
 else
   echo "==> Keeping existing config: $CONFIG"
+  if [[ "$WITH_CEC" -eq 1 || "$PIN_DISPLAY" == "none" || -n "$ADDRESS" ]]; then
+    cat <<EOF
+note: --cec/--no-pin-gui/--address apply only to a newly written config.
+      Edit $CONFIG or rerun with --force-config to rewrite it.
+EOF
+  fi
 fi
 
 ln -sfn "$VENV/bin/atv-remote" "$BIN_DIR/atv-remote"
@@ -230,12 +280,17 @@ EOF
   fi
 fi
 
-EFFECTIVE_NAME="$("$VENV/bin/atv-remote" --config "$CONFIG" doctor 2>/dev/null | sed -n 's/^name:    //p' || true)"
+DOCTOR_OUT="$("$VENV/bin/atv-remote" --config "$CONFIG" doctor 2>/dev/null || true)"
+EFFECTIVE_NAME="$(printf '%s\n' "$DOCTOR_OUT" | sed -n 's/^name:    //p')"
 EFFECTIVE_NAME="${EFFECTIVE_NAME:-$NAME}"
+EFFECTIVE_BACKEND="$(printf '%s\n' "$DOCTOR_OUT" | sed -n 's/^backend: //p')"
+EFFECTIVE_CEC="$(printf '%s\n' "$DOCTOR_OUT" | sed -n 's/^cec:     enabled=\([^ ]*\).*/\1/p')"
+EFFECTIVE_PIN="$(printf '%s\n' "$DOCTOR_OUT" | sed -n 's/^pin gui: available=\([^ ]*\).*/\1/p')"
 
 cat <<EOF
 
 Installed.
+Enabled: backend=${EFFECTIVE_BACKEND:-$BACKEND}, CEC=${EFFECTIVE_CEC:-false}, PIN card=${EFFECTIVE_PIN:-no}
 
 Next steps:
   1. Open the pairing window:       atv-remote pair

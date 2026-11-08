@@ -66,7 +66,11 @@ class _RateLimiter:
 
 @dataclass
 class CecConfig:
-    enabled: bool = True
+    # CEC is optional hardware/software, so it is opt-in.  Enabling it without
+    # cec-policy and a writable /dev/cec* is harmless (the bridge logs a
+    # warning and falls back to ordinary keys), but a first install should not
+    # depend on it.
+    enabled: bool = False
     policy: str = "auto"
     volume: bool = True
     mute: bool = True
