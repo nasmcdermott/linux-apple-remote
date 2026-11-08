@@ -15,14 +15,25 @@ The Apple TV identity/TXT record fields and the iOS 26/27 protocol handling were
 cross-checked against **atvr4samsung** by vb3:
 
 - https://github.com/vb3/atvr4samsung
-- MIT License
+- MIT License (see the upstream repository)
 - No source files are copied from this project; it is used as a protocol
   reference and for validation.
 
+The Companion protocol also builds on **pyatv** by Pierre Ståhl (postlund),
+which is both a runtime dependency and a protocol reference:
+
+- https://github.com/postlund/pyatv
+- MIT License
+- No source files are copied from this project.
+
 Runtime dependencies keep their own licenses:
 
-- pyatv (MIT), zeroconf (LGPL-2.1-or-later), cryptography (Apache-2.0/BSD),
-  evdev (BSD-3-Clause).
+- pyatv by Pierre Ståhl (postlund) — MIT
+- srptools by Igor Starikov (idlesign) — BSD-3-Clause
+- zeroconf by the python-zeroconf authors — LGPL-2.1-or-later
+- cryptography by the Python Cryptographic Authority — Apache-2.0 OR
+  BSD-3-Clause
+- evdev by Georgi Valkov — BSD-3-Clause
 
 The PIN card and Guide button also use KDE/Qt interfaces: Plasma Bigscreen's
 `org.kde.PlasmaShell.activateLauncherMenu` D-Bus method, `layer-shell-qt`, Qt 6

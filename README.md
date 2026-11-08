@@ -360,10 +360,13 @@ upstream author and Apple do not endorse it.
 
 The Companion server is a Linux adaptation of
 [`aryakvn/windows-apple-remote`](https://github.com/aryakvn/windows-apple-remote)
-(MIT). The Apple TV identity and iOS 26/27 handling were cross-checked against
-[`vb3/atvr4samsung`](https://github.com/vb3/atvr4samsung) (MIT). The output
-layer (uinput, MPRIS, log), CEC integration, power handling, PIN card and
-Guide/overlay behavior are new.
+by **Arya Kavian** (MIT). The Apple TV identity and iOS 26/27 handling were
+cross-checked against
+[`vb3/atvr4samsung`](https://github.com/vb3/atvr4samsung) by **vb3** (MIT).
+It also builds on [`pyatv`](https://github.com/postlund/pyatv) by **Pierre Ståhl
+(postlund)** (MIT) for Companion/HAP internals. The output layer (uinput,
+MPRIS, log), CEC integration, power handling, PIN card and Guide/overlay
+behavior are new.
 
 Apple, Apple TV, Siri Remote and related marks are trademarks of Apple Inc.
 This project is not affiliated with or endorsed by Apple.
