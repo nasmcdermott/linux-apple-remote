@@ -34,7 +34,7 @@ Requirements:
   `fedora-cec-toolkit` project
 
 ```sh
-git clone https://github.com/OWNER/apple-tv-remote.git
+git clone https://github.com/nmcderm/apple-tv-remote.git
 cd apple-tv-remote
 ./install.sh
 

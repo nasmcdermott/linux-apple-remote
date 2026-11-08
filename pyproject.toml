@@ -40,9 +40,9 @@ dev = ["pytest>=8", "pytest-asyncio>=0.23", "ruff>=0.6", "build>=1.2"]
 atv-remote = "atv_remote.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/OWNER/apple-tv-remote"
-Issues = "https://github.com/OWNER/apple-tv-remote/issues"
-Documentation = "https://github.com/OWNER/apple-tv-remote#readme"
+Homepage = "https://github.com/nmcderm/apple-tv-remote"
+Issues = "https://github.com/nmcderm/apple-tv-remote/issues"
+Documentation = "https://github.com/nmcderm/apple-tv-remote#readme"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/atv_remote"]

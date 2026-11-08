@@ -40,12 +40,13 @@ git commit -m "Initial public release"
 gh repo create apple-tv-remote --public --source=. --remote=origin --push
 
 # Or create the repository on github.com, then:
-git remote add origin git@github.com:OWNER/apple-tv-remote.git
+git remote add origin git@github.com:nmcderm/apple-tv-remote.git
 git push -u origin main
 ```
 
-Replace `OWNER` in `pyproject.toml` (`[project.urls]`) and in the README clone
-URL before publishing. Use a GitHub release tag such as `v0.1.0`.
+The URLs are set to `nmcderm/apple-tv-remote`; if you publish under a different
+account, update `[project.urls]` in `pyproject.toml` and the clone URL in the
+README. Use a GitHub release tag such as `v0.1.0`.
 
 ### Release checklist
 
