@@ -70,7 +70,8 @@ interfaces, desktop services, or optional effects.
 | systemd user services | systemd contributors — https://systemd.io | LGPL-2.1-or-later | `apple-tv-remote.service` and `systemctl --user` |
 | `busctl` (systemd) | systemd contributors | LGPL-2.1-or-later | Guide button calls `org.kde.PlasmaShell.activateLauncherMenu` |
 | KDE Plasma / Plasma Bigscreen | KDE Community — https://kde.org | GPL-2.0-or-later (mixed) | `activateLauncherMenu` D-Bus API; Bigscreen's hold-to-close task gesture that Select long-press drives |
-| KWin Better Blur DX | KWin effects contributors | GPL-3.0 (Fedora); source headers GPL-2.0-or-later | Optional compositor blur behind the translucent PIN card |
+| KWin Better Blur DX / Force Blur / Blur Plus / Liquid Glass | KWin effects contributors | GPL-3.0 (Fedora); source headers GPL-2.0-or-later | Optional compositor blur behind the translucent PIN card |
+| KWindowSystem (KDE Frameworks) | KDE Community — https://invent.kde.org/frameworks/kwindowsystem | LGPL-2.1-or-later | `KWindowEffects::enableBlurBehind` asks KWin to blur the rounded card shape; called best-effort through its C entry point |
 | layer-shell-qt | KDE Community | BSD-3-Clause AND CC0-1.0 AND LGPL-3.0-or-later AND MIT | `org.kde.layershell` QML surface for the top-right PIN card on KDE Wayland |
 | Qt 6 / Qt Quick | The Qt Company and contributors — https://qt.io | LGPL-3.0-only OR GPL-3.0-only WITH Qt-GPL-exception-1.0 | QML runtime for the PIN card |
 | PySide6 | Qt for Python contributors | LGPL-3.0-only OR GPL-3.0-only WITH Qt-GPL-exception-1.0 | Python bindings that launch the PIN card |

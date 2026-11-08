@@ -101,12 +101,19 @@ def choose_mode(env: dict[str, str] | None = None) -> str:
     ).lower()
 
     if session == "wayland":
+        if "kde" in desktop:
+            # Layer-shell gives the true top-right overlay.  Match the blur
+            # effect's corner radius with 'atv-remote match-blur-corners'
+            # rather than dropping to a normal window (which loses the layer).
+            return "layer" if layer_shell_available() else "window"
         if (
-            ("kde" in desktop or "sway" in desktop or "hyprland" in desktop)
+            ("sway" in desktop or "hyprland" in desktop)
             and layer_shell_available()
         ):
             return "layer"
-        return "fullscreen"
+        if "gnome" in desktop or "ubuntu" in desktop:
+            return "fullscreen"
+        return "window"
     return "window"
 
 
@@ -146,12 +153,24 @@ class PinDisplay:
             palette.background,
             "--fg",
             palette.foreground,
+            "--cell",
+            palette.cell,
+            "--cell-fg",
+            palette.cell_foreground,
+            "--muted",
+            palette.muted,
             "--accent",
             palette.accent,
             "--font",
             palette.font_family,
             "--dark",
             "1" if palette.is_dark else "0",
+            "--font-scale",
+            f"{palette.font_scale:.2f}",
+            "--blur",
+            "1" if palette.has_blur else "0",
+            "--corner-radius",
+            str(palette.corner_radius),
         ]
         try:
             self.proc = subprocess.Popen(
@@ -164,7 +183,13 @@ class PinDisplay:
             _LOGGER.warning("PIN GUI failed to start: %s", exc)
             self.proc = None
             return False
-        _LOGGER.info("PIN GUI shown (mode=%s, palette=%s)", mode, palette.background)
+        _LOGGER.info(
+            "PIN GUI shown (mode=%s, palette=%s, blur=%s, scale=%.2f)",
+            mode,
+            palette.background,
+            palette.has_blur,
+            palette.font_scale,
+        )
         return True
 
     def clear(self) -> None:

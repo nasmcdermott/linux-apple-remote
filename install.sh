@@ -18,7 +18,7 @@ CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/apple-tv-remote"
 CONFIG="$CONFIG_DIR/config.toml"
 UNIT_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
 UNIT="$UNIT_DIR/apple-tv-remote.service"
-NAME="${NAME:-$(uname -n)}"
+NAME="${NAME:-}"
 PORT="${PORT:-47832}"
 ADDRESS="${ADDRESS:-}"
 BACKEND="${BACKEND:-uinput}"
@@ -28,6 +28,7 @@ PIN_DISPLAY="${PIN_DISPLAY:-auto}"
 INSTALL_SERVICE=1
 FORCE_CONFIG=0
 WITH_TESTS=0
+MATCH_BLUR=0
 
 usage() {
   cat <<'EOF'
@@ -42,6 +43,7 @@ Options:
   --cec                   opt in to HDMI-CEC volume/mute/TV-on
   --no-cec                keep CEC off (default)
   --pin-display MODE      auto (GUI if available), qt, notification, none
+  --match-blur-corners    round Better Blur DX/Blur Plus blur to the PIN card
   --venv PATH             Python environment location (default: ./.venv)
   --no-service            install files but do not create/enable a systemd user unit
   --force-config          overwrite an existing config.toml
@@ -49,7 +51,7 @@ Options:
   -h, --help              show this help
 
 Environment: NAME, PORT, ADDRESS, BACKEND, PAIRING_WINDOW, WITH_CEC,
-             PIN_DISPLAY, VENV, BIN_DIR
+             PIN_DISPLAY, MATCH_BLUR, VENV, BIN_DIR
 EOF
 }
 
@@ -63,6 +65,7 @@ while [[ $# -gt 0 ]]; do
     --cec) WITH_CEC=1; shift ;;
     --no-cec) WITH_CEC=0; shift ;;
     --pin-display) PIN_DISPLAY="${2:?missing value}"; shift 2 ;;
+    --match-blur-corners) MATCH_BLUR=1; shift ;;
     --venv) VENV="${2:?missing value}"; shift 2 ;;
     --no-service) INSTALL_SERVICE=0; shift ;;
     --force-config) FORCE_CONFIG=1; shift ;;
@@ -133,7 +136,7 @@ done
 if [[ "$HAVE_LAYERSHELL" -eq 0 && "${XDG_CURRENT_DESKTOP:-}" == *KDE* ]]; then
   cat >&2 <<'EOF'
 note: the layer-shell-qt QML plugin was not found; the PIN card will use a
-      transparent full-screen fallback instead of a true top-right layer.
+      normal top-right window instead of a true top-right layer.
       Install layer-shell-qt with your package manager (it is normally part of
       Plasma), e.g. sudo dnf install layer-shell-qt.
 EOF
@@ -200,7 +203,8 @@ fi
 
 mkdir -p "$BIN_DIR" "$CONFIG_DIR"
 if [[ ! -f "$CONFIG" || "$FORCE_CONFIG" -eq 1 ]]; then
-  init_args=(--name "$NAME" --port "$PORT" --backend "$BACKEND" --pairing-window "$PAIRING_WINDOW")
+  init_args=(--port "$PORT" --backend "$BACKEND" --pairing-window "$PAIRING_WINDOW")
+  if [[ -n "$NAME" ]]; then init_args+=(--name "$NAME"); fi
   if [[ -n "$ADDRESS" ]]; then init_args+=(--address "$ADDRESS"); fi
   if [[ "$WITH_CEC" -eq 1 ]]; then init_args+=(--cec); fi
   if [[ "$PIN_DISPLAY" != "auto" ]]; then init_args+=(--pin-display "$PIN_DISPLAY"); fi
@@ -294,6 +298,11 @@ EOF
     echo "note: could not reach the user systemd manager."
     echo "      run it in the foreground: $VENV/bin/atv-remote --config \"$CONFIG\" run"
   fi
+fi
+
+if [[ "$MATCH_BLUR" -eq 1 ]]; then
+  echo "==> Matching force-blur corner radius to the PIN card"
+  "$VENV/bin/atv-remote" --config "$CONFIG" match-blur-corners || true
 fi
 
 DOCTOR_OUT="$("$VENV/bin/atv-remote" --config "$CONFIG" doctor 2>/dev/null || true)"

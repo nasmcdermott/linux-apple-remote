@@ -30,6 +30,12 @@ from .notify import available as notification_available
 from .notify import notify
 from .output import OutputError, make_output, uinput_status
 from .pairing import PairingGate
+from .palette import (
+    blur_corner_radius,
+    blur_corner_setting,
+    blur_ignores_region,
+    detect_corner_radius,
+)
 from .pin_display import PinDisplay, choose_mode
 from .server import Identity, RemoteServer
 
@@ -530,6 +536,18 @@ def cmd_doctor(args, cfg: Config) -> int:
             "         pin_display = \"notification\" but notify-send was not found;\n"
             "         install libnotify, or use the journal / 'atv-remote pin'."
         )
+    if cfg.pin_display in ("auto", "qt") and blur_ignores_region():
+        card_radius = detect_corner_radius()
+        blur_radius = blur_corner_radius()
+        if blur_radius is not None and blur_radius < card_radius:
+            print(
+                f"pin blur: force-blur effect has CornerRadius={blur_radius}; "
+                f"the card uses {card_radius}."
+            )
+            print(
+                "         Run 'atv-remote match-blur-corners' to set it, "
+                "or use KWin's built-in blur, for rounded card blur."
+            )
 
     print(f"address: {cfg.address or local_ip()} (auto-detected)")
 
@@ -549,6 +567,111 @@ def cmd_doctor(args, cfg: Config) -> int:
     return 0
 
 
+def _replace_kwin_corner_radius(path: Path, section: str, value: int) -> bool:
+    """Surgically update CornerRadius, preserving the rest of kwinrc."""
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+    except OSError:
+        lines = []
+    out: list[str] = []
+    in_section = False
+    replaced = False
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("[") and stripped.endswith("]"):
+            if in_section and not replaced:
+                out.append(f"CornerRadius={value}\n")
+                replaced = True
+            in_section = stripped == f"[{section}]"
+        if in_section and not replaced and stripped.lower().startswith("cornerradius"):
+            indent = line[: len(line) - len(line.lstrip())]
+            out.append(f"{indent}CornerRadius={value}\n")
+            replaced = True
+            continue
+        out.append(line)
+    if in_section and not replaced:
+        out.append(f"CornerRadius={value}\n")
+        replaced = True
+    if not replaced:
+        if out and not out[-1].endswith("\n"):
+            out[-1] += "\n"
+        out.append(f"\n[{section}]\nCornerRadius={value}\n")
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("".join(out), encoding="utf-8")
+    except OSError:
+        return False
+    return True
+
+
+def _reload_kwin() -> bool:
+    for command in (
+        ["qdbus", "org.kde.KWin", "/KWin", "org.kde.KWin.reconfigure"],
+        ["qdbus6", "org.kde.KWin", "/KWin", "org.kde.KWin.reconfigure"],
+        [
+            "busctl",
+            "--user",
+            "call",
+            "org.kde.KWin",
+            "/KWin",
+            "org.kde.KWin",
+            "reconfigure",
+        ],
+    ):
+        if not shutil.which(command[0]):
+            continue
+        rc, _ = _run(command)
+        if rc == 0:
+            return True
+    return False
+
+
+def cmd_match_blur_corners(args, cfg: Config) -> int:
+    """Opt in to matching Better Blur DX/Blur Plus' corner radius to the card."""
+    setting = blur_corner_setting()
+    if setting is None:
+        print("No Better Blur DX / Blur Plus CornerRadius setting found in kwinrc.")
+        return 1
+    section, current = setting
+    target = detect_corner_radius()
+    if current == target:
+        print(f"[{section}] CornerRadius is already {target}.")
+        return 0
+    if args.dry_run:
+        print(f"Would set [{section}] CornerRadius {current} -> {target}.")
+        return 0
+
+    config_home = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
+    path = config_home / "kwinrc"
+    backup = path.with_name(path.name + ".bak-apple-tv-remote")
+    if path.is_file() and not backup.exists():
+        try:
+            shutil.copy2(path, backup)
+            print(f"Backup: {backup}")
+        except OSError as exc:
+            print(f"warning: could not back up {path}: {exc}")
+
+    kwrite = shutil.which("kwriteconfig6") or shutil.which("kwriteconfig5")
+    written = False
+    if kwrite:
+        rc, _ = _run(
+            [kwrite, "--file", "kwinrc", "--group", section, "--key", "CornerRadius", str(target)]
+        )
+        written = rc == 0
+    if not written:
+        written = _replace_kwin_corner_radius(path, section, target)
+    if not written:
+        print(f"Could not update {path}.")
+        return 1
+
+    print(f"Set [{section}] CornerRadius = {target}.")
+    if _reload_kwin():
+        print("KWin reloaded.")
+    else:
+        print("Restart KWin or log in again to apply.")
+    return 0
+
+
 # ---------------------------------------------------------------------------
 # config / keys
 
@@ -564,7 +687,7 @@ def cmd_config_init(args, cfg: Config) -> int:
     )
     target = write_default_config(
         cfg.config_path,
-        name=args.name or cfg.name,
+        name=args.name,
         port=args.port if args.port is not None else cfg.port,
         address=args.address,
         backend=args.backend or cfg.backend,
@@ -652,6 +775,11 @@ def build_parser() -> argparse.ArgumentParser:
     preview.add_argument("--pin", default="1234")
     preview.add_argument("--seconds", type=int, default=8)
     sub.add_parser("doctor", help="check permissions, firewall, service and state")
+    blur = sub.add_parser(
+        "match-blur-corners",
+        help="set Better Blur DX/Blur Plus corner radius to the PIN card radius",
+    )
+    blur.add_argument("--dry-run", action="store_true", help="show the change only")
     sub.add_parser("keys", help="show the action -> Linux key mapping")
 
     config = sub.add_parser("config", help="inspect or create the config file")
@@ -705,6 +833,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_preview_pin(args, cfg)
     if args.command == "doctor":
         return cmd_doctor(args, cfg)
+    if args.command == "match-blur-corners":
+        return cmd_match_blur_corners(args, cfg)
     if args.command == "keys":
         return cmd_keys(args, cfg)
     if args.command == "config":

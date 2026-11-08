@@ -92,6 +92,34 @@ def test_config_defaults_are_valid():
     Config().validate()
 
 
+def test_name_defaults_to_os_hostname(tmp_path, monkeypatch):
+    monkeypatch.setattr("atv_remote.config.socket.gethostname", lambda: "PlasmaBox")
+    cfg = Config(name="")
+    cfg.validate()
+    assert cfg.name == "PlasmaBox"
+
+    path = tmp_path / "config.toml"
+    path.write_text(config_text())
+    assert load_config(path).name == "PlasmaBox"
+
+
+def test_name_falls_back_to_linux_tv(monkeypatch):
+    monkeypatch.setattr("atv_remote.config.socket.gethostname", lambda: "")
+    cfg = Config(name="")
+    cfg.validate()
+    assert cfg.name == "Linux TV"
+
+
+def test_config_text_omits_name_by_default():
+    text = config_text()
+    assert '# name = "Linux TV"' in text
+    assert "\nname = " not in text
+
+
+def test_config_text_writes_explicit_name():
+    assert 'name = "Living Room"' in config_text(name="Living Room")
+
+
 def test_config_text_includes_cec_and_new_keys():
     text = config_text()
     assert "[cec]" in text

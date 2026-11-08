@@ -19,6 +19,16 @@ from .keymap import DEFAULT_KEYMAP, validate_keymap
 
 APP_DIR = "apple-tv-remote"
 BACKENDS = ("uinput", "mpris", "log")
+HOSTNAME_FALLBACK = "Linux TV"
+
+
+def os_hostname() -> str:
+    """The name shown on the phone: the live OS hostname, else a fallback."""
+    try:
+        name = socket.gethostname().strip()
+    except OSError:
+        name = ""
+    return name or HOSTNAME_FALLBACK
 
 
 def config_dir() -> Path:
@@ -36,7 +46,7 @@ def default_state_path() -> Path:
 
 @dataclass
 class Config:
-    name: str = field(default_factory=socket.gethostname)
+    name: str = field(default_factory=os_hostname)
     port: int = 47832
     address: str | None = None
     backend: str = "uinput"
@@ -57,8 +67,7 @@ class Config:
             raise ValueError(f"port must be 0-65535, not {self.port!r}")
         if int(self.pairing_window) < 0:
             raise ValueError("pairing_window must be >= 0 seconds")
-        if not self.name.strip():
-            raise ValueError("name must not be empty")
+        self.name = str(self.name or "").strip() or os_hostname()
         self.pin_display = self.pin_display.lower().strip()
         if self.pin_display not in ("auto", "qt", "notification", "none"):
             raise ValueError("pin_display must be auto, qt, notification or none")
@@ -157,7 +166,11 @@ def config_text(
         "# Edit, then restart: systemctl --user restart apple-tv-remote",
         "",
         "[remote]",
-        f"name = {json.dumps(name or socket.gethostname())}",
+        (
+            f"name = {json.dumps(name)}"
+            if name
+            else '# name = "Linux TV"   # optional; default: OS hostname'
+        ),
         f"port = {int(port)}",
         'backend = ' + json.dumps(backend),
         'device_name = "Apple TV Remote Bridge"',

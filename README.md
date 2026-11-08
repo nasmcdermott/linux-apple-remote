@@ -58,10 +58,11 @@ The installer writes only inside your home directory and the checkout:
 Useful options:
 
 ```sh
-./install.sh --name "Living Room"     # name shown on the phone
+./install.sh --name "Living Room"     # optional override; default: OS hostname
 ./install.sh --cec                    # opt in to HDMI-CEC volume/mute/TV-on
 ./install.sh --pin-display notification  # notify-send instead of the Qt card
 ./install.sh --pin-display none          # log/atv-remote pin only
+./install.sh --match-blur-corners     # round Better Blur DX/Blur Plus to the card
 ./install.sh --address 192.168.1.50   # pin the advertised interface
 ./install.sh --backend mpris          # media-only, no /dev/uinput access
 ./install.sh --no-service             # foreground only
@@ -154,8 +155,24 @@ and stays until pairing succeeds or the window expires.
 
 - KDE Wayland: layer-shell card; GNOME Wayland: transparent full-screen overlay;
   X11: normal top-right window.
-- Colors follow `kdeglobals` or GNOME `gsettings`.
-- The card is translucent; KWin Better Blur DX blurs the content behind it.
+- Colors, fonts and scaling come from `kdeglobals` (window background/foreground,
+  selection accent, button and inactive-text colors, font family and point size)
+  and follow the light/dark color scheme. GNOME uses `gsettings`; other desktops
+  get a neutral palette. The whole card scales with the desktop font size.
+- The card has **no painted-in white glass sheen**. It is a translucent rounded
+  surface and asks KWin for blur behind its rounded shape, so Better Blur DX,
+  Force Blur, Blur Plus, Liquid Glass and other compositor effects decide how
+  strong the blur is. When no blur effect is available, the card falls back to a
+  nearly opaque fill so the PIN stays legible.
+- A subtle ring in the system accent color pulses around the card.
+- Blur is compositor-driven. The card asks KWin for a rounded blur region; if a
+  third-party effect rounds its own region (for example Better Blur DX
+  `CornerRadius`), you may see a faint square fringe at the corners.
+  `atv-remote doctor` reports the effect's current radius, and
+  `atv-remote match-blur-corners` (or `./install.sh --match-blur-corners`)
+  sets Better Blur DX / Blur Plus to the card radius and reloads KWin. It is
+  opt-in because it also rounds blur corners on other windows; the previous
+  `kwinrc` is saved as `~/.config/kwinrc.bak-apple-tv-remote`.
 - It runs in the **system** Python with PySide6, not the project venv.
 - `pin_display` chooses the presentation:
 
@@ -182,7 +199,7 @@ and stays until pairing succeeds or the window expires.
 
 ```toml
 [remote]
-name = "linux tv"
+# name = "Linux TV"   # optional; default: OS hostname (fallback: "Linux TV")
 port = 47832
 backend = "uinput"        # uinput | mpris | log
 device_name = "Apple TV Remote Bridge"
@@ -219,6 +236,10 @@ power_on = true        # cec-policy wake --reason powerkey on Power
 timeout = 15
 ```
 
+`name` is optional. If it is omitted, the bridge advertises the machine's current
+OS hostname; if the hostname cannot be read, it falls back to `Linux TV`. Set
+`name` only when you want a fixed name instead of the hostname.
+
 Remove a mapping line to make that button do nothing. Restart after editing:
 
 ```sh
@@ -236,6 +257,7 @@ atv-remote run -v          # foreground with debug logging
 atv-remote pair
 atv-remote pin
 atv-remote preview-pin     # show the PIN card for 8 s
+atv-remote match-blur-corners  # opt in: round force-blur to the card radius
 atv-remote unpair --list
 atv-remote unpair --all
 ```

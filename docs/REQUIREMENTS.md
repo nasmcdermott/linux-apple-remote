@@ -78,6 +78,7 @@ Python (not the project venv):
 |---|---|
 | PySide6 (Qt Quick) | Qt Quick runtime and Python bindings |
 | `layer-shell-qt` | True top-right layer on KDE Wayland |
+| `kf6-kwindowsystem` | Optional rounded blur request via `KWindowEffects` (normally installed with Plasma) |
 
 Package names vary; search for `pyside6` and `layer-shell` if these are not
 exact:
@@ -98,8 +99,11 @@ If you prefer a desktop notification instead of Qt, set
 `libnotify` on Fedora/openSUSE, `libnotify-bin` on Debian/Ubuntu,
 `libnotify` on Arch). Set `pin_display = "none"` to disable both.
 
-Colors come from `kdeglobals` (KDE) or `gsettings` (GNOME); no theme package is
-required.
+Colors, font family and font size come from `kdeglobals` (KDE) or `gsettings`
+(GNOME); no theme package is required. The card uses the window background and
+foreground, the selection accent, the button colors for the PIN cells, and the
+inactive text color for secondary labels, so it follows the desktop's
+light/dark color scheme. It scales with the desktop font size.
 
 ### Optional glass blur
 
@@ -107,9 +111,20 @@ required.
 sudo dnf install kwin-effects-better-blur-dx   # Fedora example
 ```
 
-Enable **Better Blur DX** in *System Settings → Desktop Effects* and make sure
-`BlurNonMatching=true` (or add the window class). The card is readable without
-it; it is just less glassy.
+Enable **Better Blur DX**, **Force Blur**, **Blur Plus** or **Liquid Glass** in
+*System Settings → Desktop Effects*. The card asks KWin for a rounded blur
+region, so effects that honor the app region give a seamless frosted card. Some
+effects round the blur region themselves: if you see a faint square fringe at
+the card corners, run
+
+```sh
+atv-remote match-blur-corners
+```
+
+or pass `--match-blur-corners` to `./install.sh`. It sets Better Blur DX / Blur
+Plus `CornerRadius` to the card radius and reloads KWin; it is opt-in because it
+also rounds blur corners on other windows. `atv-remote doctor` reports the
+current value. The card is readable without any blur; it is just less glassy.
 
 ## Desktop / shell integration
 

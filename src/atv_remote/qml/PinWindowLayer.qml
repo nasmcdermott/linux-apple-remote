@@ -5,11 +5,14 @@ import org.kde.layershell as LayerShell
 Window {
     id: window
 
-    width: 360
-    height: 180
+    width: Math.round(360 * guiScale)
+    height: Math.round(180 * guiScale)
     visible: true
     color: "transparent"
-    flags: Qt.FramelessWindowHint | Qt.WindowTransparentForInput | Qt.WindowDoesNotAcceptFocus
+    flags: Qt.FramelessWindowHint
+        | Qt.WindowTransparentForInput
+        | Qt.WindowDoesNotAcceptFocus
+        | Qt.NoDropShadowWindowHint
 
     LayerShell.Window.scope: "apple-tv-remote-pin"
     LayerShell.Window.anchors: LayerShell.Window.AnchorTop | LayerShell.Window.AnchorRight
@@ -21,5 +24,8 @@ Window {
 
     PinCard {
         anchors.fill: parent
+        radius: guiRadius
+        uiScale: guiScale
+        hasBlur: guiBlur
     }
 }
