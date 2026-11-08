@@ -182,7 +182,7 @@ and stays until pairing succeeds or the window expires.
 
 ```toml
 [remote]
-name = "fedora"
+name = "linux tv"
 port = 47832
 backend = "uinput"        # uinput | mpris | log
 device_name = "Apple TV Remote Bridge"
