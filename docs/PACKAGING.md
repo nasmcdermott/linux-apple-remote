@@ -40,11 +40,11 @@ git commit -m "Initial public release"
 gh repo create linux-apple-remote --public --source=. --remote=origin --push
 
 # Or create the repository on github.com, then:
-git remote add origin git@github.com:nmcderm/linux-apple-remote.git
+git remote add origin git@github.com:nasmcdermott/linux-apple-remote.git
 git push -u origin main
 ```
 
-The URLs are set to `nmcderm/linux-apple-remote`; if you publish under a
+The URLs are set to `nasmcdermott/linux-apple-remote`; if you publish under a
 different account, update `[project.urls]` in `pyproject.toml` and the clone URL
 in the README. Use a GitHub release tag such as `v0.1.0`.
 

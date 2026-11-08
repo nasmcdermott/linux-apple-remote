@@ -39,7 +39,7 @@ Requirements:
   `fedora-cec-toolkit` project
 
 ```sh
-git clone https://github.com/nmcderm/linux-apple-remote.git
+git clone https://github.com/nasmcdermott/linux-apple-remote.git
 cd linux-apple-remote
 ./install.sh
 
