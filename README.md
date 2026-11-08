@@ -67,6 +67,7 @@ Useful options:
 ./install.sh --no-service             # foreground only
 ./install.sh --force-config           # rewrite config.toml
 ./install.sh --with-tests             # install pytest too
+./install.sh --mouse-mode home        # TV button = home signal (trackpad or home)
 ```
 
 Hardware-specific extras stay off by default. CEC needs `cec-policy` and a
@@ -81,7 +82,7 @@ edit an existing `config.toml` or rerun with `--force-config`.
 | D-pad or swipe | Arrow keys |
 | Select / touch-pad tap | Enter |
 | Back / Menu | Esc |
-| TV / Home | Plasma Bigscreen home; Meta on regular KDE/GNOME |
+| TV / Home | `home` action (Bigscreen home or Meta); or trackpad mode (see `mouse_mode`) |
 | Play/Pause | Play/Pause media key |
 | Next / Previous | Next/Previous track |
 | Volume ± | CEC volume via `cec-policy` (or media keys) |
@@ -168,6 +169,13 @@ and stays until pairing succeeds or the window expires.
   The PIN is always written to the journal and kept in `last-pin` for
   `atv-remote pin`.
 
+### `mouse_mode` (TV button behavior)
+
+| Value | Behavior |
+|---|---|
+| `trackpad` (default) | Touch area becomes a trackpad: drag moves cursor, tap = left click |
+| `home` | TV button sends `home` action (Bigscreen `KEY_HOMEPAGE` or Meta) |
+
 ## Configuration
 
 `~/.config/apple-tv-remote/config.toml`:
@@ -180,6 +188,7 @@ backend = "uinput"        # uinput | mpris | log
 device_name = "Apple TV Remote Bridge"
 pairing_window = 600      # seconds; 0 disables new pairings
 pin_display = "auto"      # auto | qt | notification | none
+mouse_mode = "trackpad"   # trackpad | home
 # address = "192.168.1.50" # if auto-detection picks the wrong interface
 
 [keys]
