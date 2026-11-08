@@ -46,6 +46,7 @@ class Config:
     keymap: dict[str, str] = field(default_factory=lambda: dict(DEFAULT_KEYMAP))
     cec: CecConfig = field(default_factory=CecConfig)
     pin_display: str = "auto"
+    mouse_mode: str = "trackpad"  # "trackpad" or "home"
     config_path: Path | None = None
 
     def validate(self) -> None:
@@ -61,6 +62,8 @@ class Config:
         self.pin_display = self.pin_display.lower().strip()
         if self.pin_display not in ("auto", "qt", "notification", "none"):
             raise ValueError("pin_display must be auto, qt, notification or none")
+        if self.mouse_mode not in ("trackpad", "home"):
+            raise ValueError("mouse_mode must be trackpad or home")
         self.keymap = validate_keymap(self.keymap)
         self.cec.validate()
 
@@ -95,6 +98,8 @@ def load_config(path: Path | str | None = None) -> Config:
         cfg.pairing_window = int(remote["pairing_window"])
     if "pin_display" in remote:
         cfg.pin_display = str(remote["pin_display"])
+    if "mouse_mode" in remote:
+        cfg.mouse_mode = str(remote["mouse_mode"])
     if "state" in remote:
         state = Path(str(remote["state"])).expanduser()
         if not state.is_absolute():
@@ -141,6 +146,7 @@ def config_text(
     keymap: dict[str, str] | None = None,
     cec: CecConfig | None = None,
     pin_display: str = "auto",
+    mouse_mode: str = "trackpad",
 ) -> str:
     """Render a config file with comments and the current defaults."""
     mapping = dict(DEFAULT_KEYMAP)
@@ -157,6 +163,7 @@ def config_text(
         'device_name = "Apple TV Remote Bridge"',
         f"pairing_window = {int(pairing_window)}",
         f'pin_display = {json.dumps(pin_display)}   # auto | qt | notification | none',
+        f'mouse_mode = {json.dumps(mouse_mode)}     # trackpad | home',
         (
             f"address = {json.dumps(address)}"
             if address
