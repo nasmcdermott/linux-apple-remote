@@ -1,0 +1,10 @@
+# Let the locally logged-in user create virtual input devices through
+# /dev/uinput. This is what the bridge needs to inject arrow/media keys.
+#
+# Install once (system change, not done by install.sh):
+#   sudo install -Dm644 contrib/udev/99-uinput.rules /etc/udev/rules.d/99-uinput.rules
+#   sudo udevadm control --reload-rules && sudo udevadm trigger
+#
+# Verify:
+#   test -w /dev/uinput && echo writable
+KERNEL=="uinput", MODE="0660", GROUP="input", TAG+="uaccess"

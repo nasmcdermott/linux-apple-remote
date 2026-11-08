@@ -1,0 +1,75 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "apple-tv-remote-linux"
+version = "0.1.0"
+description = "Control Linux media/navigation with the iPhone's Apple TV Remote (Companion Link bridge)"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+authors = [{ name = "apple-tv-remote contributors" }]
+keywords = ["apple tv", "remote", "companion", "linux", "uinput", "wayland", "x11"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Operating System :: POSIX :: Linux",
+  "Environment :: Console",
+  "Environment :: X11 Applications",
+  "Intended Audience :: End Users/Desktop",
+  "Topic :: Multimedia :: Video",
+  "Topic :: Desktop Environment",
+]
+dependencies = [
+  # We build on pyatv internals (Companion server auth, framing, OPACK).
+  "pyatv>=0.18,<0.19",
+  # pyatv 0.18 builds on srptools' 1.x SRPServerSession signature.
+  # srptools 2.0 changed the constructor and breaks Companion pairing.
+  "srptools>=1.0.1,<2",
+  "zeroconf>=0.131",
+  "cryptography>=42",
+  "evdev>=1.7",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8", "pytest-asyncio>=0.23"]
+dev = ["pytest>=8", "pytest-asyncio>=0.23", "ruff>=0.6", "build>=1.2"]
+
+[project.scripts]
+atv-remote = "atv_remote.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/OWNER/apple-tv-remote"
+Issues = "https://github.com/OWNER/apple-tv-remote/issues"
+Documentation = "https://github.com/OWNER/apple-tv-remote#readme"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/atv_remote"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "src/",
+  "tests/",
+  "scripts/",
+  "docs/",
+  "contrib/",
+  "install.sh",
+  "uninstall.sh",
+  "justfile",
+  "README.md",
+  "LICENSE",
+  "NOTICE.md",
+  "LICENSES/",
+  "pyproject.toml",
+]
+
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100

@@ -1,0 +1,20 @@
+[Unit]
+Description=Apple TV Remote bridge (iPhone/iPad Companion remote)
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+# For a pipx/system install. The repository installer writes a unit with the
+# checkout's .venv path instead; use whichever path is correct on your system.
+ExecStart=%h/.local/bin/atv-remote --config %h/.config/apple-tv-remote/config.toml run
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=10
+Environment=PYTHONUNBUFFERED=1
+SyslogIdentifier=apple-tv-remote
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,268 @@
+#!/usr/bin/env bash
+# Install the Apple TV Remote bridge for the current user.
+#
+# Writes only under $HOME and this checkout:
+#   .venv/                                  Python environment
+#   ~/.local/bin/atv-remote                 launcher symlink
+#   ~/.config/apple-tv-remote/              config + pairing state
+#   ~/.config/systemd/user/                 optional user service
+#
+# It never uses sudo and never edits system files.
+
+set -euo pipefail
+
+ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+VENV="${VENV:-$ROOT/.venv}"
+BIN_DIR="${BIN_DIR:-$HOME/.local/bin}"
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/apple-tv-remote"
+CONFIG="$CONFIG_DIR/config.toml"
+UNIT_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
+UNIT="$UNIT_DIR/apple-tv-remote.service"
+NAME="${NAME:-$(uname -n)}"
+PORT="${PORT:-47832}"
+BACKEND="${BACKEND:-uinput}"
+PAIRING_WINDOW="${PAIRING_WINDOW:-600}"
+INSTALL_SERVICE=1
+FORCE_CONFIG=0
+WITH_TESTS=0
+
+usage() {
+  cat <<'EOF'
+Usage: ./install.sh [options]
+
+Options:
+  --name NAME             name shown on the iPhone (default: hostname)
+  --port PORT             TCP control port (default: 47832; 0 = random)
+  --backend NAME          uinput (default), mpris, or log
+  --pairing-window SEC    seconds a new pairing is accepted (default: 600)
+  --venv PATH             Python environment location (default: ./.venv)
+  --no-service            install files but do not create/enable a systemd user unit
+  --force-config          overwrite an existing config.toml
+  --with-tests            also install pytest/pytest-asyncio
+  -h, --help              show this help
+
+Environment: NAME, PORT, BACKEND, PAIRING_WINDOW, VENV, BIN_DIR
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --name) NAME="${2:?missing value}"; shift 2 ;;
+    --port) PORT="${2:?missing value}"; shift 2 ;;
+    --backend) BACKEND="${2:?missing value}"; shift 2 ;;
+    --pairing-window) PAIRING_WINDOW="${2:?missing value}"; shift 2 ;;
+    --venv) VENV="${2:?missing value}"; shift 2 ;;
+    --no-service) INSTALL_SERVICE=0; shift ;;
+    --force-config) FORCE_CONFIG=1; shift ;;
+    --with-tests) WITH_TESTS=1; shift ;;
+    -h|--help) usage; exit 0 ;;
+    *) echo "unknown option: $1" >&2; usage >&2; exit 2 ;;
+  esac
+done
+
+case "$BACKEND" in
+  uinput|mpris|log) ;;
+  *) echo "error: --backend must be uinput, mpris or log" >&2; exit 2 ;;
+esac
+
+PYTHON="${PYTHON:-python3}"
+if ! command -v "$PYTHON" >/dev/null 2>&1; then
+  echo "error: $PYTHON not found (need Python 3.11+)" >&2
+  exit 1
+fi
+if ! "$PYTHON" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)'; then
+  echo "error: Python 3.11+ required (found $("$PYTHON" -V 2>&1))" >&2
+  exit 1
+fi
+
+# The PIN card runs in the *system* Python (not the project venv), because
+# distros ship PySide6 as a system package.  Accept any python3 that can
+# import it, including an explicit ATV_PIN_GUI_PYTHON override.
+GUI_PYTHON=""
+for candidate in "${ATV_PIN_GUI_PYTHON:-}" python3 /usr/bin/python3; do
+  [[ -n "$candidate" ]] || continue
+  command -v "$candidate" >/dev/null 2>&1 || continue
+  if "$candidate" -c 'import PySide6' >/dev/null 2>&1; then
+    GUI_PYTHON="$candidate"
+    break
+  fi
+done
+if [[ -z "$GUI_PYTHON" ]]; then
+  cat >&2 <<'EOF'
+note: PySide6 (Qt Quick) was not found, so the top-right PIN card will not
+      appear. Pairing still works: the PIN is printed in the log and available
+      with 'atv-remote pin'.
+      Install the distro package for PySide6 QtQuick, e.g.:
+        Fedora:        sudo dnf install python3-pyside6
+        Debian/Ubuntu: sudo apt install python3-pyside6.qml
+        Arch:          sudo pacman -S pyside6
+        openSUSE:      sudo zypper install python3-pyside6
+      Then run ./install.sh again (or set ATV_PIN_GUI_PYTHON=/path/to/python3).
+EOF
+fi
+
+HAVE_LAYERSHELL=0
+for root in \
+  /usr/lib64/qt6/qml \
+  /usr/lib/qt6/qml \
+  /usr/local/lib64/qt6/qml \
+  /usr/local/lib/qt6/qml \
+  /usr/lib/*/qt6/qml; do
+  if [[ -d "$root/org/kde/layershell" ]]; then
+    HAVE_LAYERSHELL=1
+    break
+  fi
+done
+if [[ "$HAVE_LAYERSHELL" -eq 0 && "${XDG_CURRENT_DESKTOP:-}" == *KDE* ]]; then
+  cat >&2 <<'EOF'
+note: the layer-shell-qt QML plugin was not found; the PIN card will use a
+      transparent full-screen fallback instead of a true top-right layer.
+      Install layer-shell-qt with your package manager (it is normally part of
+      Plasma), e.g. sudo dnf install layer-shell-qt.
+EOF
+fi
+
+echo "==> Installing into $ROOT"
+install_args=(-e "$ROOT")
+if [[ "$WITH_TESTS" -eq 1 ]]; then
+  install_args+=("pytest>=8" "pytest-asyncio>=0.23")
+fi
+if command -v uv >/dev/null 2>&1; then
+  if [[ ! -x "$VENV/bin/python" ]]; then
+    uv venv --python "$PYTHON" "$VENV"
+  fi
+  uv pip install --python "$VENV/bin/python" "${install_args[@]}"
+else
+  if [[ ! -x "$VENV/bin/python" ]]; then
+    "$PYTHON" -m venv "$VENV"
+  fi
+  if ! "$VENV/bin/python" -m pip --version >/dev/null 2>&1; then
+    echo "error: pip is missing from the venv. Install uv (recommended) or python3-pip." >&2
+    exit 1
+  fi
+  "$VENV/bin/python" -m pip install --upgrade pip >/dev/null
+  "$VENV/bin/pip" install "${install_args[@]}"
+fi
+
+mkdir -p "$BIN_DIR" "$CONFIG_DIR"
+if [[ ! -f "$CONFIG" || "$FORCE_CONFIG" -eq 1 ]]; then
+  init_args=(--name "$NAME" --port "$PORT" --backend "$BACKEND" --pairing-window "$PAIRING_WINDOW")
+  if [[ "$FORCE_CONFIG" -eq 1 ]]; then init_args+=(--force); fi
+  "$VENV/bin/atv-remote" --config "$CONFIG" config init "${init_args[@]}" >/dev/null
+  echo "==> Wrote config: $CONFIG"
+else
+  echo "==> Keeping existing config: $CONFIG"
+fi
+
+ln -sfn "$VENV/bin/atv-remote" "$BIN_DIR/atv-remote"
+echo "==> Launcher: $BIN_DIR/atv-remote"
+case ":$PATH:" in
+  *":$BIN_DIR:"*) ;;
+  *) echo "note: $BIN_DIR is not in PATH; use $VENV/bin/atv-remote or add it to PATH" ;;
+esac
+
+if [[ ! -w /dev/uinput ]]; then
+  cat >&2 <<EOF
+
+warning: /dev/uinput is not writable, so the uinput backend will not work.
+  temporary:  sudo setfacl -m u:$(id -un):rw /dev/uinput
+  persistent (recommended, one sudo command):
+      sudo install -Dm644 "$ROOT/contrib/udev/99-uinput.rules" \\
+        /etc/udev/rules.d/99-uinput.rules
+      sudo udevadm control --reload-rules && sudo udevadm trigger
+  or run:     sudo "$VENV/bin/atv-remote" --config "$CONFIG" run
+  or media-only fallback:
+              ./install.sh --backend mpris --force-config
+EOF
+fi
+
+if command -v firewall-cmd >/dev/null 2>&1 && firewall-cmd --state >/dev/null 2>&1; then
+  if ! firewall-cmd --query-port=5353/udp >/dev/null 2>&1; then
+    cat >&2 <<'EOF'
+
+note: firewalld is running and mDNS (UDP 5353) is not open.
+  The iPhone discovers the bridge over mDNS.  This is a system firewall change,
+  so this installer does not do it for you.  Optional:
+    temporary:  sudo firewall-cmd --add-service=mdns
+    permanent:  sudo firewall-cmd --permanent --add-service=mdns && sudo firewall-cmd --reload
+EOF
+  fi
+fi
+
+if [[ "$INSTALL_SERVICE" -eq 1 ]] && command -v systemctl >/dev/null 2>&1; then
+  mkdir -p "$UNIT_DIR"
+  cat >"$UNIT" <<EOF
+[Unit]
+Description=Apple TV Remote bridge (iPhone/iPad Companion remote)
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+ExecStart="$VENV/bin/atv-remote" --config "$CONFIG" run
+WorkingDirectory=$ROOT
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=10
+Environment=PYTHONUNBUFFERED=1
+SyslogIdentifier=apple-tv-remote
+
+[Install]
+WantedBy=default.target
+EOF
+  echo "==> Wrote user unit: $UNIT"
+  if systemctl --user daemon-reload 2>/dev/null; then
+    systemctl --user enable apple-tv-remote.service 2>/dev/null || true
+    if systemctl --user is-active --quiet apple-tv-remote.service 2>/dev/null; then
+      systemctl --user restart apple-tv-remote.service 2>/dev/null \
+        && echo "==> Restarted apple-tv-remote.service"
+    elif systemctl --user start apple-tv-remote.service 2>/dev/null; then
+      echo "==> Started apple-tv-remote.service"
+    else
+      echo "note: could not start the user service (no user systemd session?)."
+      echo "      run it in the foreground: $VENV/bin/atv-remote --config \"$CONFIG\" run"
+    fi
+  else
+    echo "note: could not reach the user systemd manager."
+    echo "      run it in the foreground: $VENV/bin/atv-remote --config \"$CONFIG\" run"
+  fi
+fi
+
+EFFECTIVE_NAME="$("$VENV/bin/atv-remote" --config "$CONFIG" doctor 2>/dev/null | sed -n 's/^name:    //p' || true)"
+EFFECTIVE_NAME="${EFFECTIVE_NAME:-$NAME}"
+
+cat <<EOF
+
+Installed.
+
+Next steps:
+  1. Open the pairing window:       atv-remote pair
+  2. On the iPhone: open the Apple TV Remote app and select "$EFFECTIVE_NAME"
+  3. Enter the 4-digit PIN shown in the top-right card
+     (or run 'atv-remote pin' / read the service log).
+  4. Test keys:                     atv-remote doctor
+  5. Change mappings:               $CONFIG
+EOF
+
+if [[ "$INSTALL_SERVICE" -eq 1 ]]; then
+  cat <<EOF
+
+     Watch the log:                 journalctl --user -u apple-tv-remote -f
+     Run in foreground:             $VENV/bin/atv-remote --config "$CONFIG" run -v
+EOF
+else
+  cat <<EOF
+
+     No service was installed.  Run in the foreground:
+       $VENV/bin/atv-remote --config "$CONFIG" run -v
+EOF
+fi
+
+cat <<EOF
+
+Uninstall:
+  $ROOT/uninstall.sh            # remove service + launcher
+  $ROOT/uninstall.sh --purge    # also remove .venv and pairing state
+EOF
