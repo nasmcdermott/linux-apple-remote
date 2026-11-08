@@ -1,6 +1,8 @@
 # Notices and upstream attribution
 
-This project is MIT-licensed (see `LICENSE`).
+**Linux Apple Remote** is an independent Linux adaptation, not a fork of the
+upstream project and not affiliated with or endorsed by the upstream author or
+Apple Inc. It is MIT-licensed (see `LICENSE`).
 
 The Companion Link server in `src/atv_remote/server.py` is a Linux adaptation of
 **windows-apple-remote** by Arya Kavian:

@@ -1,9 +1,13 @@
-# Apple TV Remote for Linux
+# Linux Apple Remote
 
 Control a Linux media PC with the **Apple TV Remote app on iPhone or iPad** —
 the same app you use for an Apple TV. The bridge advertises the machine as an
 Apple TV over **Companion Link**, pairs with the phone, and injects ordinary
 Linux key events through `uinput`.
+
+This is an independent Linux adaptation, not a fork of the Windows project and
+not affiliated with or endorsed by Apple or the upstream author. See
+[License and credits](#license-and-credits).
 
 ```
 iPhone / iPad Apple TV Remote
@@ -35,8 +39,8 @@ Requirements:
   `fedora-cec-toolkit` project
 
 ```sh
-git clone https://github.com/nmcderm/apple-tv-remote.git
-cd apple-tv-remote
+git clone https://github.com/nmcderm/linux-apple-remote.git
+cd linux-apple-remote
 ./install.sh
 
 atv-remote doctor     # permissions, CEC, firewall, PIN GUI
@@ -252,7 +256,7 @@ session D-Bus, and LAN mDNS; that makes sandboxed packaging a poor fit.
 
 - **Primary:** source tarball + `install.sh` + systemd user unit.
 - **Recommended next:** publish to PyPI and install with
-  `pipx install apple-tv-remote-linux`, then use the unit in
+  `pipx install linux-apple-remote`, then use the unit in
   `contrib/systemd/`.
 - **Later/optional:** `.rpm`/`.deb` via `nfpm` or distro packaging.
 - **Not recommended:** Flatpak, Snap, Docker, AppImage. They either cannot
@@ -347,6 +351,12 @@ The source checkout is never deleted.
 adapts, so the code can be reused and extended freely. See `LICENSE`,
 `NOTICE.md`, and [`docs/CREDITS.md`](docs/CREDITS.md) for upstream attribution
 and the license of every runtime component.
+
+MIT means you may copy, modify, publish, sublicense or sell this code, provided
+you keep the copyright and permission notices. If you build on it, keep the
+`LICENSE`, `NOTICE.md` and `LICENSES/` files with the code, and say what you
+changed. This project is an independent adaptation, not an official port; the
+upstream author and Apple do not endorse it.
 
 The Companion server is a Linux adaptation of
 [`aryakvn/windows-apple-remote`](https://github.com/aryakvn/windows-apple-remote)

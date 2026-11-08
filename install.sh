@@ -256,7 +256,7 @@ if [[ "$INSTALL_SERVICE" -eq 1 ]] && command -v systemctl >/dev/null 2>&1; then
   mkdir -p "$UNIT_DIR"
   cat >"$UNIT" <<EOF
 [Unit]
-Description=Apple TV Remote bridge (iPhone/iPad Companion remote)
+Description=Linux Apple Remote bridge (iPhone/iPad Companion remote)
 After=network-online.target
 Wants=network-online.target
 StartLimitIntervalSec=60
@@ -277,6 +277,9 @@ WantedBy=default.target
 EOF
   echo "==> Wrote user unit: $UNIT"
   if systemctl --user daemon-reload 2>/dev/null; then
+    # Clear a previous start-limit failure (for example after an upgrade that
+    # briefly removed the launcher).
+    systemctl --user reset-failed apple-tv-remote.service 2>/dev/null || true
     systemctl --user enable apple-tv-remote.service 2>/dev/null || true
     if systemctl --user is-active --quiet apple-tv-remote.service 2>/dev/null; then
       systemctl --user restart apple-tv-remote.service 2>/dev/null \

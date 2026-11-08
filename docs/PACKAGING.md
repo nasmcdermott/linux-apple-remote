@@ -37,16 +37,16 @@ git add -A
 git commit -m "Initial public release"
 
 # With the GitHub CLI (recommended):
-gh repo create apple-tv-remote --public --source=. --remote=origin --push
+gh repo create linux-apple-remote --public --source=. --remote=origin --push
 
 # Or create the repository on github.com, then:
-git remote add origin git@github.com:nmcderm/apple-tv-remote.git
+git remote add origin git@github.com:nmcderm/linux-apple-remote.git
 git push -u origin main
 ```
 
-The URLs are set to `nmcderm/apple-tv-remote`; if you publish under a different
-account, update `[project.urls]` in `pyproject.toml` and the clone URL in the
-README. Use a GitHub release tag such as `v0.1.0`.
+The URLs are set to `nmcderm/linux-apple-remote`; if you publish under a
+different account, update `[project.urls]` in `pyproject.toml` and the clone URL
+in the README. Use a GitHub release tag such as `v0.1.0`.
 
 ### Release checklist
 
@@ -70,7 +70,7 @@ python -m twine upload dist/*
 Then users can install without the checkout:
 
 ```sh
-pipx install apple-tv-remote-linux
+pipx install linux-apple-remote
 mkdir -p ~/.config/systemd/user
 cp contrib/systemd/apple-tv-remote.service ~/.config/systemd/user/
 systemctl --user daemon-reload
@@ -79,6 +79,33 @@ systemctl --user enable --now apple-tv-remote
 
 The PIN card still uses the system Python + PySide6; the pipx environment only
 runs the daemon and the uinput/mDNS code.
+
+## Forks, pull requests and attribution
+
+MIT already gives permission to reuse the upstream code. You do **not** need to
+fork, ask permission, or get a maintainer's approval to publish a derivative
+work. GitHub's **Fork** button is just a copy; it is not a request and needs no
+approval. A **pull request** is a request to merge changes upstream, also
+optional.
+
+For this project, a separate repository is more honest than a fork: the output
+layer, CEC handling, PIN card and packaging are new, and the upstream project is
+Windows-focused. Publish independently and link back. If you have a protocol fix
+that helps the upstream, open a small PR separately; do not dump the Linux port
+into their issue tracker.
+
+Practical attribution checklist:
+
+- Keep `LICENSE` (your copyright + MIT) and the upstream MIT text in
+  `NOTICE.md` / `LICENSES/` with the code and in release artifacts.
+- Say clearly: "independent adaptation, not affiliated with or endorsed by the
+  original author or Apple."
+- Link to the upstream repository and describe what you changed.
+- Do not reuse the upstream project name, logo or visual identity as your own.
+- Do not relicense upstream code under a different license.
+- For Apple: use "Apple TV Remote" descriptively, ship no Apple code, binaries
+  or logos, and keep the trademark disclaimer. Do not call the project
+  "official" or "Apple-approved."
 
 ## License choice
 

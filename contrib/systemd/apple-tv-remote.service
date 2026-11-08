@@ -1,5 +1,5 @@
 [Unit]
-Description=Apple TV Remote bridge (iPhone/iPad Companion remote)
+Description=Linux Apple Remote bridge (iPhone/iPad Companion remote)
 After=network-online.target
 Wants=network-online.target
 StartLimitIntervalSec=60
