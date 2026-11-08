@@ -59,8 +59,8 @@ class Config:
         if not self.name.strip():
             raise ValueError("name must not be empty")
         self.pin_display = self.pin_display.lower().strip()
-        if self.pin_display not in ("auto", "qt", "none"):
-            raise ValueError("pin_display must be auto, qt or none")
+        if self.pin_display not in ("auto", "qt", "notification", "none"):
+            raise ValueError("pin_display must be auto, qt, notification or none")
         self.keymap = validate_keymap(self.keymap)
         self.cec.validate()
 
@@ -156,7 +156,7 @@ def config_text(
         'backend = ' + json.dumps(backend),
         'device_name = "Apple TV Remote Bridge"',
         f"pairing_window = {int(pairing_window)}",
-        f'pin_display = {json.dumps(pin_display)}   # auto | qt | none',
+        f'pin_display = {json.dumps(pin_display)}   # auto | qt | notification | none',
         (
             f"address = {json.dumps(address)}"
             if address

@@ -116,9 +116,9 @@ def test_cec_can_be_enabled_in_generated_config():
 
 def test_pin_display_roundtrip(tmp_path):
     path = tmp_path / "config.toml"
-    path.write_text(config_text(pin_display="none"))
-    cfg = load_config(path)
-    assert cfg.pin_display == "none"
+    for mode in ("auto", "qt", "notification", "none"):
+        path.write_text(config_text(pin_display=mode))
+        assert load_config(path).pin_display == mode
 
 
 def test_pin_display_rejects_unknown_value(tmp_path):

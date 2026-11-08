@@ -30,6 +30,7 @@ Requirements:
 - Linux with **Python 3.11+** and a writable `/dev/uinput`
 - Phone and PC on the same LAN (mDNS, UDP 5353)
 - Optional PIN card: PySide6 (Qt Quick) and, on KDE Wayland, `layer-shell-qt`
+- Optional PIN notification: `notify-send` / libnotify
 - Optional CEC volume/mute/TV-on: the `cec-policy` script from the companion
   `fedora-cec-toolkit` project
 
@@ -55,7 +56,8 @@ Useful options:
 ```sh
 ./install.sh --name "Living Room"     # name shown on the phone
 ./install.sh --cec                    # opt in to HDMI-CEC volume/mute/TV-on
-./install.sh --no-pin-gui             # no Qt card; PIN via log/atv-remote pin
+./install.sh --pin-display notification  # notify-send instead of the Qt card
+./install.sh --pin-display none          # log/atv-remote pin only
 ./install.sh --address 192.168.1.50   # pin the advertised interface
 ./install.sh --backend mpris          # media-only, no /dev/uinput access
 ./install.sh --no-service             # foreground only
@@ -150,8 +152,17 @@ and stays until pairing succeeds or the window expires.
 - Colors follow `kdeglobals` or GNOME `gsettings`.
 - The card is translucent; KWin Better Blur DX blurs the content behind it.
 - It runs in the **system** Python with PySide6, not the project venv.
-- `pin_display = "auto" | "qt" | "none"` in the config. The PIN is always
-  written to the journal and kept in `last-pin` for `atv-remote pin`.
+- `pin_display` chooses the presentation:
+
+  | Value | Behavior |
+  |---|---|
+  | `auto` (default) | GUI if available, otherwise log only |
+  | `qt` | require the GUI; log fallback |
+  | `notification` | opt-in `notify-send` card/notification instead of Qt |
+  | `none` | log and `atv-remote pin` only |
+
+  The PIN is always written to the journal and kept in `last-pin` for
+  `atv-remote pin`.
 
 ## Configuration
 
@@ -164,7 +175,7 @@ port = 47832
 backend = "uinput"        # uinput | mpris | log
 device_name = "Apple TV Remote Bridge"
 pairing_window = 600      # seconds; 0 disables new pairings
-pin_display = "auto"      # auto | qt | none
+pin_display = "auto"      # auto | qt | notification | none
 # address = "192.168.1.50" # if auto-detection picks the wrong interface
 
 [keys]
@@ -287,12 +298,15 @@ Or use the media-only fallback: `./install.sh --backend mpris --force-config`.
 
 ### The PIN card does not appear
 
-- `atv-remote doctor` should report `pin gui: available=yes`.
+- `atv-remote doctor` reports `pin display: mode=... gui=yes/no
+  notification=yes/no`.
 - Install PySide6 QtQuick (`python3-pyside6`, `python3-pyside6.qml`, or
   `pyside6`) and `layer-shell-qt` on KDE Wayland.
+- Prefer notifications? Set `pin_display = "notification"` and install
+  `notify-send` / libnotify.
 - The card only appears for a **new** pairing. Use `atv-remote preview-pin` to
   test it.
-- Without PySide6, use `atv-remote pin` or `journalctl --user -u
+- Without either, use `atv-remote pin` or `journalctl --user -u
   apple-tv-remote -f`.
 
 ### Guide / channel buttons

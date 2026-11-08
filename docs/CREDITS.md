@@ -74,6 +74,7 @@ interfaces, desktop services, or optional effects.
 | Qt 6 / Qt Quick | LGPL-3.0-only OR GPL-3.0-only WITH Qt-GPL-exception-1.0 | QML runtime for the PIN card |
 | PySide6 | LGPL-3.0-only OR GPL-3.0-only WITH Qt-GPL-exception-1.0 | Python bindings that launch the PIN card |
 | libcec | GPL-2.0-or-later | Used by Plasma Bigscreen's CEC input handler; this project calls `cec-policy` instead of linking libcec |
+| `libnotify` / `notify-send` | LGPL-2.1-or-later | Optional opt-in PIN notification |
 | WirePlumber (`wpctl`) | MIT | Optional `mpris` backend volume control |
 | PulseAudio utilities (`pactl`) | LGPL-2.1-or-later | Optional `mpris` backend fallback |
 | `playerctl` | LGPL-2.1-or-later | Optional `mpris` backend media control |

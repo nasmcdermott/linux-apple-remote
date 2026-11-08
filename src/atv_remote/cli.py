@@ -26,6 +26,8 @@ from .config import (
     load_config,
     write_default_config,
 )
+from .notify import available as notification_available
+from .notify import notify
 from .output import OutputError, make_output, uinput_status
 from .pairing import PairingGate
 from .pin_display import PinDisplay, choose_mode
@@ -96,10 +98,23 @@ def _make_pin_handler(cfg: Config, pin_display: PinDisplay):
     def show_pin(pin: str) -> None:
         _write_private(_pin_path(cfg), pin + "\n")
         print(f"\n  Pairing PIN: {pin}\n  Enter it on your iPhone or iPad.\n", flush=True)
+        if cfg.pin_display == "none":
+            return
+        if cfg.pin_display == "notification":
+            if not notify(
+                "Apple TV Remote",
+                f"Pairing PIN: {pin}",
+                timeout_ms=max(1, cfg.pairing_window) * 1000,
+            ):
+                _LOGGER.warning(
+                    "PIN notification unavailable; use the PIN printed above "
+                    "or 'atv-remote pin' (install libnotify/notify-send)"
+                )
+            return
         if not pin_display.show(pin, cfg.pairing_window):
             _LOGGER.warning(
                 "PIN card unavailable; enter the PIN printed above "
-                "(install PySide6 for the on-screen card)"
+                "(install PySide6, or set pin_display = \"notification\")"
             )
 
     return show_pin
@@ -110,6 +125,8 @@ def _make_paired_handler(cfg: Config, gate: PairingGate, pin_display: PinDisplay
         gate.close()
         pin_display.clear()
         _remove(_pin_path(cfg))
+        if cfg.pin_display == "notification":
+            notify("Apple TV Remote", "Paired successfully.")
         print("Paired successfully. The pairing window is now closed.", flush=True)
 
     return on_paired
@@ -121,7 +138,7 @@ def _make_paired_handler(cfg: Config, gate: PairingGate, pin_display: PinDisplay
 
 async def _serve(cfg: Config) -> int:
     output = make_output(cfg.backend, cfg.keymap, cfg.device_name, cfg.cec)
-    pin_display = PinDisplay(enabled=cfg.pin_display != "none")
+    pin_display = PinDisplay(enabled=cfg.pin_display in ("auto", "qt"))
     gate = PairingGate(_pairing_path(cfg), cfg.pairing_window)
     gate.touch()  # first-run convenience: allow pairing for a few minutes
     identity = Identity(cfg.state)
@@ -254,15 +271,26 @@ def cmd_pair(args, cfg: Config) -> int:
         "(or with 'atv-remote pin').",
         flush=True,
     )
+    if cfg.pin_display == "notification":
+        notify("Apple TV Remote", "Pairing window open. Add the remote on your iPhone.")
     return 0
 
 
 def cmd_preview_pin(args, cfg: Config) -> int:
-    display = PinDisplay(enabled=cfg.pin_display != "none")
+    seconds = max(1, args.seconds)
+    if cfg.pin_display == "notification":
+        if not notify("Apple TV Remote", f"Pairing PIN: {args.pin}", timeout_ms=seconds * 1000):
+            print("PIN notification unavailable; install libnotify/notify-send.")
+            return 1
+        print(f"Showed PIN notification for {seconds}s.", flush=True)
+        return 0
+    if cfg.pin_display == "none":
+        print("pin_display = \"none\"; the PIN is only in the log and 'atv-remote pin'.")
+        return 1
+    display = PinDisplay(enabled=True)
     if not display.available():
         print("PIN GUI is not available. Check 'atv-remote doctor' and install python3-pyside6.")
         return 1
-    seconds = max(1, args.seconds)
     if not display.show(args.pin, seconds):
         print("Could not start the PIN GUI.")
         return 1
@@ -482,16 +510,25 @@ def cmd_doctor(args, cfg: Config) -> int:
             "[cec].enabled = true."
         )
 
-    gui = PinDisplay(enabled=cfg.pin_display != "none")
+    gui = PinDisplay(enabled=cfg.pin_display in ("auto", "qt"))
     print(
-        f"pin gui: available={'yes' if gui.available() else 'no'} "
-        f"mode={choose_mode()} python={gui.python or 'not found'}"
+        f"pin display: mode={cfg.pin_display} gui={'yes' if gui.available() else 'no'} "
+        f"notification={'yes' if notification_available() else 'no'}"
     )
-    if not gui.available():
+    print(
+        f"pin gui: mode={choose_mode()} python={gui.python or 'not found'}"
+    )
+    if cfg.pin_display in ("auto", "qt") and not gui.available():
         print(
             "         install PySide6 (python3-pyside6 / python3-pyside6.qml / pyside6)\n"
-            "         and layer-shell-qt on KDE Wayland; the PIN still appears in\n"
-            "         the journal and with 'atv-remote pin'."
+            "         and layer-shell-qt on KDE Wayland; or set\n"
+            "         pin_display = \"notification\" (needs notify-send). The PIN\n"
+            "         is always in the journal and with 'atv-remote pin'."
+        )
+    if cfg.pin_display == "notification" and not notification_available():
+        print(
+            "         pin_display = \"notification\" but notify-send was not found;\n"
+            "         install libnotify, or use the journal / 'atv-remote pin'."
         )
 
     print(f"address: {cfg.address or local_ip()} (auto-detected)")
@@ -534,7 +571,7 @@ def cmd_config_init(args, cfg: Config) -> int:
         pairing_window=(
             args.pairing_window if args.pairing_window is not None else cfg.pairing_window
         ),
-        pin_display="none" if args.no_pin_gui else "auto",
+        pin_display=args.pin_display,
         cec=cec,
         force=args.force,
     )
@@ -629,8 +666,12 @@ def build_parser() -> argparse.ArgumentParser:
                       help="enable HDMI-CEC volume/mute/TV-on (opt-in)")
     init.add_argument("--no-cec", dest="cec", action="store_false",
                       help="disable HDMI-CEC (default)")
-    init.add_argument("--no-pin-gui", action="store_true",
-                      help="disable the on-screen pairing PIN card")
+    init.add_argument(
+        "--pin-display",
+        choices=("auto", "qt", "notification", "none"),
+        default="auto",
+        help="PIN presentation: auto (GUI if available), qt, notification, or none",
+    )
     init.add_argument("--force", action="store_true", help="overwrite an existing config")
     init.set_defaults(cec=False)
     config_sub.add_parser("show", help="print the config file or defaults")

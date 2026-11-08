@@ -93,6 +93,11 @@ On GNOME Wayland the card uses a transparent full-screen fallback; on X11 it is
 a normal top-right window. Without PySide6, pairing still works: the PIN is in
 the journal and `atv-remote pin`.
 
+If you prefer a desktop notification instead of Qt, set
+`pin_display = "notification"` and install `notify-send` (libnotify:
+`libnotify` on Fedora/openSUSE, `libnotify-bin` on Debian/Ubuntu,
+`libnotify` on Arch). Set `pin_display = "none"` to disable both.
+
 Colors come from `kdeglobals` (KDE) or `gsettings` (GNOME); no theme package is
 required.
 

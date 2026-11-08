@@ -41,7 +41,7 @@ Options:
   --pairing-window SEC    seconds a new pairing is accepted (default: 600)
   --cec                   opt in to HDMI-CEC volume/mute/TV-on
   --no-cec                keep CEC off (default)
-  --no-pin-gui            disable the on-screen pairing PIN card
+  --pin-display MODE      auto (GUI if available), qt, notification, none
   --venv PATH             Python environment location (default: ./.venv)
   --no-service            install files but do not create/enable a systemd user unit
   --force-config          overwrite an existing config.toml
@@ -62,7 +62,7 @@ while [[ $# -gt 0 ]]; do
     --pairing-window) PAIRING_WINDOW="${2:?missing value}"; shift 2 ;;
     --cec) WITH_CEC=1; shift ;;
     --no-cec) WITH_CEC=0; shift ;;
-    --no-pin-gui) PIN_DISPLAY="none"; shift ;;
+    --pin-display) PIN_DISPLAY="${2:?missing value}"; shift 2 ;;
     --venv) VENV="${2:?missing value}"; shift 2 ;;
     --no-service) INSTALL_SERVICE=0; shift ;;
     --force-config) FORCE_CONFIG=1; shift ;;
@@ -75,6 +75,10 @@ done
 case "$BACKEND" in
   uinput|mpris|log) ;;
   *) echo "error: --backend must be uinput, mpris or log" >&2; exit 2 ;;
+esac
+case "$PIN_DISPLAY" in
+  auto|qt|notification|none) ;;
+  *) echo "error: --pin-display must be auto, qt, notification or none" >&2; exit 2 ;;
 esac
 
 PYTHON="${PYTHON:-python3}"
@@ -90,7 +94,7 @@ fi
 # The PIN card runs in the *system* Python (not the project venv), because
 # distros ship PySide6 as a system package.  Accept any python3 that can
 # import it, including an explicit ATV_PIN_GUI_PYTHON override.
-if [[ "$PIN_DISPLAY" != "none" ]]; then
+if [[ "$PIN_DISPLAY" == "auto" || "$PIN_DISPLAY" == "qt" ]]; then
 GUI_PYTHON=""
 for candidate in "${ATV_PIN_GUI_PYTHON:-}" python3 /usr/bin/python3; do
   [[ -n "$candidate" ]] || continue
@@ -134,7 +138,16 @@ note: the layer-shell-qt QML plugin was not found; the PIN card will use a
       Plasma), e.g. sudo dnf install layer-shell-qt.
 EOF
 fi
-fi  # PIN_DISPLAY != none
+fi  # PIN_DISPLAY == auto|qt
+
+if [[ "$PIN_DISPLAY" == "notification" ]] && ! command -v notify-send >/dev/null 2>&1; then
+  cat >&2 <<'EOF'
+note: pin_display = "notification" was requested, but notify-send was not
+      found. The PIN will only appear in the log and with 'atv-remote pin'.
+      Install libnotify (package name: libnotify / libnotify-bin) if you want
+      desktop notifications.
+EOF
+fi
 
 # CEC is opt-in.  Only print hints; the install itself never depends on it.
 CEC_POLICY=""
@@ -190,15 +203,15 @@ if [[ ! -f "$CONFIG" || "$FORCE_CONFIG" -eq 1 ]]; then
   init_args=(--name "$NAME" --port "$PORT" --backend "$BACKEND" --pairing-window "$PAIRING_WINDOW")
   if [[ -n "$ADDRESS" ]]; then init_args+=(--address "$ADDRESS"); fi
   if [[ "$WITH_CEC" -eq 1 ]]; then init_args+=(--cec); fi
-  if [[ "$PIN_DISPLAY" == "none" ]]; then init_args+=(--no-pin-gui); fi
+  if [[ "$PIN_DISPLAY" != "auto" ]]; then init_args+=(--pin-display "$PIN_DISPLAY"); fi
   if [[ "$FORCE_CONFIG" -eq 1 ]]; then init_args+=(--force); fi
   "$VENV/bin/atv-remote" --config "$CONFIG" config init "${init_args[@]}" >/dev/null
   echo "==> Wrote config: $CONFIG"
 else
   echo "==> Keeping existing config: $CONFIG"
-  if [[ "$WITH_CEC" -eq 1 || "$PIN_DISPLAY" == "none" || -n "$ADDRESS" ]]; then
+  if [[ "$WITH_CEC" -eq 1 || "$PIN_DISPLAY" != "auto" || -n "$ADDRESS" ]]; then
     cat <<EOF
-note: --cec/--no-pin-gui/--address apply only to a newly written config.
+note: --cec/--pin-display/--address apply only to a newly written config.
       Edit $CONFIG or rerun with --force-config to rewrite it.
 EOF
   fi
@@ -285,12 +298,12 @@ EFFECTIVE_NAME="$(printf '%s\n' "$DOCTOR_OUT" | sed -n 's/^name:    //p')"
 EFFECTIVE_NAME="${EFFECTIVE_NAME:-$NAME}"
 EFFECTIVE_BACKEND="$(printf '%s\n' "$DOCTOR_OUT" | sed -n 's/^backend: //p')"
 EFFECTIVE_CEC="$(printf '%s\n' "$DOCTOR_OUT" | sed -n 's/^cec:     enabled=\([^ ]*\).*/\1/p')"
-EFFECTIVE_PIN="$(printf '%s\n' "$DOCTOR_OUT" | sed -n 's/^pin gui: available=\([^ ]*\).*/\1/p')"
+EFFECTIVE_PIN="$(printf '%s\n' "$DOCTOR_OUT" | sed -n 's/^pin display: mode=\([^ ]*\).*/\1/p')"
 
 cat <<EOF
 
 Installed.
-Enabled: backend=${EFFECTIVE_BACKEND:-$BACKEND}, CEC=${EFFECTIVE_CEC:-false}, PIN card=${EFFECTIVE_PIN:-no}
+Enabled: backend=${EFFECTIVE_BACKEND:-$BACKEND}, CEC=${EFFECTIVE_CEC:-false}, PIN=${EFFECTIVE_PIN:-auto}
 
 Next steps:
   1. Open the pairing window:       atv-remote pair
