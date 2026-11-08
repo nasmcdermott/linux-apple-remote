@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import fcntl
 import logging
 import os
 import shutil
 import signal
 import socket
+import struct
 import subprocess
 import sys
 import time
@@ -47,23 +49,117 @@ _LOGGER = logging.getLogger(__name__)
 # helpers
 
 
-def local_ip() -> str:
-    """IPv4 address of the interface that routes multicast, else the internet.
+_VIRTUAL_IFACE_PREFIXES = (
+    "br-",
+    "cni",
+    "docker",
+    "flannel",
+    "podman",
+    "tailscale",
+    "tap",
+    "tun",
+    "veth",
+    "virbr",
+    "wg",
+    "zt",
+)
 
-    A UDP connect does not send a packet; it only asks the kernel to select a
-    source address.  The multicast probe is first because that is the interface
-    mDNS will use.
+
+def _iface_ipv4(name: str) -> str | None:
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            packed = fcntl.ioctl(
+                sock.fileno(),
+                0x8915,  # SIOCGIFADDR
+                struct.pack("256s", name.encode("utf-8")[:15]),
+            )
+        return socket.inet_ntoa(packed[20:24])
+    except OSError:
+        return None
+
+
+def _virtual_iface(name: str) -> bool:
+    return name == "lo" or name.startswith(_VIRTUAL_IFACE_PREFIXES)
+
+
+def _default_route_iface() -> str | None:
+    """Interface carrying the default route, ignoring container bridges."""
+    try:
+        with open("/proc/net/route", encoding="ascii") as handle:
+            next(handle)
+            best: tuple[int, str] | None = None
+            for line in handle:
+                fields = line.split()
+                if len(fields) < 8 or fields[1] != "00000000":
+                    continue
+                try:
+                    metric = int(fields[6])
+                except ValueError:
+                    continue
+                if best is None or metric < best[0]:
+                    best = (metric, fields[0])
+            return best[1] if best else None
+    except (OSError, StopIteration):
+        return None
+
+
+def _ip_is_virtual(address: str) -> bool:
+    for _index, name in socket.if_nameindex():
+        if _iface_ipv4(name) == address:
+            return _virtual_iface(name)
+    return False
+
+
+def local_ip() -> str:
+    """Pick the LAN IPv4 address, never a Docker/container bridge.
+
+    The previous multicast-only probe could choose ``172.17.0.1`` when the
+    service started before Wi-Fi (Docker's bridge is up first).  Prefer the
+    default-route interface, then the internet/multicast source address, and
+    skip interfaces that are clearly virtual.
     """
-    for host in ("224.0.0.251", "8.8.8.8"):
+    default = _default_route_iface()
+    if default and not _virtual_iface(default):
+        address = _iface_ipv4(default)
+        if address and not address.startswith("127."):
+            return address
+
+    for host, port in (("1.1.1.1", 53), ("8.8.8.8", 53), ("224.0.0.251", 5353)):
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-                sock.connect((host, 5353 if host.startswith("224.") else 53))
+                sock.connect((host, port))
                 address = sock.getsockname()[0]
-                if address and not address.startswith("127."):
-                    return address
         except OSError:
-            pass
+            continue
+        if address and not address.startswith("127.") and not _ip_is_virtual(address):
+            return address
+
+    for _index, name in socket.if_nameindex():
+        if _virtual_iface(name):
+            continue
+        address = _iface_ipv4(name)
+        if address and not address.startswith("127."):
+            return address
+
     return socket.gethostbyname(socket.gethostname())
+
+
+async def _wait_for_lan_ip(timeout: float = 30.0) -> str | None:
+    """Wait for Wi-Fi/Ethernet at boot instead of advertising a Docker bridge."""
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + timeout
+    while True:
+        address = local_ip()
+        if (
+            address
+            and not address.startswith("127.")
+            and address != "0.0.0.0"
+            and not _ip_is_virtual(address)
+        ):
+            return address
+        if loop.time() >= deadline:
+            return None
+        await asyncio.sleep(0.5)
 
 
 def configure_logging(verbose: bool) -> None:
@@ -145,9 +241,14 @@ def _make_paired_handler(cfg: Config, gate: PairingGate, pin_display: PinDisplay
 async def _serve(cfg: Config) -> int:
     output = make_output(cfg.backend, cfg.keymap, cfg.device_name, cfg.cec)
     pin_display = PinDisplay(enabled=cfg.pin_display in ("auto", "qt"))
-    gate = PairingGate(_pairing_path(cfg), cfg.pairing_window)
-    gate.touch()  # first-run convenience: allow pairing for a few minutes
     identity = Identity(cfg.state)
+    gate = PairingGate(_pairing_path(cfg), cfg.pairing_window)
+    if identity.clients:
+        # Already paired: reconnect silently, no PIN card on every boot.
+        gate.close()
+    else:
+        # First run: allow pairing for a few minutes.
+        gate.touch()
 
     loop = asyncio.get_running_loop()
     server = await loop.create_server(
@@ -165,7 +266,12 @@ async def _serve(cfg: Config) -> int:
         cfg.port,
     )
     port = server.sockets[0].getsockname()[1]
-    ip = cfg.address or local_ip()
+    if cfg.address:
+        ip = cfg.address
+    else:
+        # At boot the user service can start before Wi-Fi; wait for the real
+        # LAN interface instead of advertising Docker's 172.17.0.1 bridge.
+        ip = await _wait_for_lan_ip(30)
     if not ip or ip.startswith("127.") or ip == "0.0.0.0":
         server.close()
         output.close()
@@ -203,6 +309,13 @@ async def _serve(cfg: Config) -> int:
         print(
             f"Pairing window is open for {cfg.pairing_window}s. "
             "The PIN card appears in the top-right.",
+            flush=True,
+        )
+    elif identity.clients:
+        print(
+            f"{len(identity.clients)} paired device(s) remembered; "
+            "the iPhone should reconnect automatically. "
+            "Run 'atv-remote pair' to add another.",
             flush=True,
         )
 
